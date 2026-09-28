@@ -46,16 +46,17 @@ class HeuristicController(Controller):
 
 
 def build_prompt(state: dict) -> str:
+    # Everything that never changes during a match comes first and the live numbers last:
+    # Ollama reuses its cache for an unchanged prompt prefix, so on a CPU-only machine
+    # only the short final line has to be re-read for each move.
     return (
-        f"You are controlling the {state['side'].upper()} paddle in a Pong-like game.\n"
-        f"Court size: {state['court_width']:.0f}x{state['court_height']:.0f} (x grows right, y grows down).\n"
-        f"Your paddle: x={state['own_x']:.0f}, y={state['own_y']:.0f}, height={state['own_height']:.0f}.\n"
-        f"Opponent paddle: x={state['opp_x']:.0f}, y={state['opp_y']:.0f}, height={state['opp_height']:.0f}.\n"
-        f"Ball: x={state['ball_x']:.0f}, y={state['ball_y']:.0f}, "
-        f"vx={state['ball_vx']:.0f}, vy={state['ball_vy']:.0f}.\n"
-        f"Score: you {state['own_score']} - opponent {state['opp_score']}.\n"
-        "Move your paddle to intercept the ball and score on the opponent's side.\n"
-        "Respond with EXACTLY one word: UP, DOWN, or STAY. No explanation."
+        f"You control the {state['side']} paddle in Pong, at x={state['own_x']:.0f}. "
+        f"The court is {state['court_width']:.0f} wide and {state['court_height']:.0f} tall; "
+        f"y grows downward. Your paddle is {state['own_height']:.0f} tall. "
+        "Keep the ball's y inside your paddle when it reaches you. "
+        "Answer with exactly one word: UP, DOWN, or STAY.\n"
+        f"Paddle y={state['own_y']:.0f}. Ball x={state['ball_x']:.0f} y={state['ball_y']:.0f} "
+        f"vx={state['ball_vx']:.0f} vy={state['ball_vy']:.0f}. Move:"
     )
 
 

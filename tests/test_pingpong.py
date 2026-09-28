@@ -1,6 +1,6 @@
 import unittest
 
-from pingpong_llm.controllers import HeuristicController, parse_action
+from pingpong_llm.controllers import HeuristicController, build_prompt, parse_action
 from pingpong_llm.game import HEIGHT, WIDTH, PongGame
 from pingpong_llm.main import PRESETS
 
@@ -23,6 +23,22 @@ class ParseActionTest(unittest.TestCase):
     def test_garbage_falls_back_to_stay(self):
         self.assertEqual(parse_action(""), "STAY")
         self.assertEqual(parse_action(None), "STAY")
+
+
+class PromptTest(unittest.TestCase):
+    def test_only_the_last_line_changes_between_moves(self):
+        # Keeps Ollama's prefix cache useful: slow CPUs re-read only the changed tail.
+        game = PongGame()
+        before = build_prompt(game.get_state("left")).splitlines()
+        for _ in range(10):
+            game.step(1 / 30, "DOWN", "STAY")
+        after = build_prompt(game.get_state("left")).splitlines()
+        self.assertEqual(before[:-1], after[:-1])
+        self.assertNotEqual(before[-1], after[-1])
+
+    def test_live_state_line_is_short(self):
+        game = PongGame()
+        self.assertLess(len(build_prompt(game.get_state("right")).splitlines()[-1].split()), 12)
 
 
 class PhysicsTest(unittest.TestCase):
