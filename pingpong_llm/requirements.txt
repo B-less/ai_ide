@@ -1,0 +1,4 @@
+requests>=2.31
+
+# Optional, only needed for --render pygame (ascii rendering needs nothing extra):
+# pygame>=2.5
