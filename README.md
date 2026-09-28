@@ -14,8 +14,8 @@ Quick start (after setting up a virtual environment as described in the
 project README):
 
 ```bash
-python -m pingpong_llm.main --left heuristic --right heuristic                  # no LLM needed
-python -m pingpong_llm.main --left ollama --model llama3.2 --preset slow-model  # your model vs. a bot
+python -m pingpong_llm.main --left heuristic --right heuristic  # no LLM needed
+python -m pingpong_llm.main --no-think                          # nemotron-3-nano:30b-cloud vs. a bot
 ```
 
 Run the tests with `python -m unittest discover -s tests`.

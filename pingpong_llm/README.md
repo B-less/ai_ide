@@ -46,10 +46,16 @@ pip install -r pingpong_llm/requirements.txt
 Optional: `pip install pygame` for `--render pygame`. Re-activate the venv in
 every new terminal.
 
-Then make sure Ollama has a model: `ollama list` to see what you have,
-`ollama pull llama3.2` to get one. Cloud models (names ending in `-cloud`,
-e.g. `nemotron-3-nano:30b-cloud`) work too after `ollama signin`; they go
-through the same local Ollama API, so nothing else changes.
+Then set up the default model, `nemotron-3-nano:30b-cloud`. It runs on
+Ollama's servers rather than your machine, so it's fast even without a GPU;
+you still need the Ollama app running, since requests go through it:
+
+```bash
+ollama signin
+ollama pull nemotron-3-nano:30b-cloud
+```
+
+To use a local model instead, `ollama pull <model>` and pass `--model <model>`.
 
 ## Run it
 
@@ -57,18 +63,20 @@ through the same local Ollama API, so nothing else changes.
 # sanity-check the physics with no LLM involved
 python -m pingpong_llm.main --left heuristic --right heuristic
 
-# a local model vs. the scripted opponent, ascii rendering
-python -m pingpong_llm.main --left ollama --model llama3.2 --right heuristic
+# the default cloud model vs. the scripted opponent
+python -m pingpong_llm.main --no-think
 
 # same, with a real window
-python -m pingpong_llm.main --left ollama --model llama3.2 --right heuristic --render pygame
+python -m pingpong_llm.main --no-think --render pygame
 
-# two different local models facing off
-python -m pingpong_llm.main \
-  --left ollama --model llama3.2 \
-  --right ollama --right-model qwen2.5:7b \
-  --render pygame
+# a local model instead (see "Tuning for slower models" if it runs on CPU)
+python -m pingpong_llm.main --model nemotron-3-nano:4b --no-think --preset slow-model --timeout 60
+
+# cloud model vs. local model
+python -m pingpong_llm.main --no-think --right ollama --right-model nemotron-3-nano:4b --preset slow-model
 ```
+
+By default the left paddle is the LLM and the right is the scripted bot.
 
 The script checks up front that Ollama is reachable and the model is
 installed, and exits with a clear message if not. In ascii mode, each LLM

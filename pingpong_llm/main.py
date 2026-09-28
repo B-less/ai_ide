@@ -4,18 +4,14 @@ Examples:
     # sanity check the physics with no LLM involved
     python -m pingpong_llm.main --left heuristic --right heuristic
 
-    # a local Ollama model vs the scripted opponent
-    python -m pingpong_llm.main --left ollama --model llama3.2 --right heuristic --render pygame
+    # the default cloud model vs the scripted opponent (needs `ollama signin`)
+    python -m pingpong_llm.main --no-think
 
-    # give a slow local model a bigger paddle and a slower ball
-    python -m pingpong_llm.main --left ollama --model llama3.2 --right heuristic --preset slow-model
+    # a local model on a slow machine: bigger paddle, slower ball, longer timeout
+    python -m pingpong_llm.main --model nemotron-3-nano:4b --no-think --preset slow-model --timeout 60
 
-    # reasoning models (e.g. nemotron-3-nano) answer far faster with thinking off
-    python -m pingpong_llm.main --left ollama --model nemotron-3-nano:4b --no-think --preset slow-model
-
-    # two different local models facing off
-    python -m pingpong_llm.main --left ollama --model llama3.2 \\
-        --right ollama --right-model qwen2.5:7b --render pygame
+    # cloud model vs local model
+    python -m pingpong_llm.main --no-think --right ollama --right-model nemotron-3-nano:4b --preset slow-model
 """
 
 from __future__ import annotations
@@ -29,10 +25,13 @@ from .controllers import (
     HeuristicController,
     OllamaController,
     check_ollama_model,
+    is_cloud_model,
     warm_up_ollama_model,
 )
 from .game import BALL_BASE_SPEED, BALL_SPEEDUP, PADDLE_HEIGHT, PADDLE_SPEED, PongGame
 from .render_ascii import clear_screen, enable_ansi, render as render_ascii
+
+DEFAULT_MODEL = "nemotron-3-nano:30b-cloud"
 
 # Bundles of paddle/ball physics tuned for how much reaction time a model needs.
 # "slow-model" gives a bigger paddle and a much slower, non-accelerating ball,
@@ -71,7 +70,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--left", choices=["heuristic", "ollama"], default="ollama")
     parser.add_argument("--right", choices=["heuristic", "ollama"], default="heuristic")
-    parser.add_argument("--model", default="llama3.2", help="Ollama model for the left paddle")
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help=f"Ollama model for the left paddle (default: {DEFAULT_MODEL})",
+    )
     parser.add_argument("--right-model", default=None, help="Ollama model for the right paddle (defaults to --model)")
     parser.add_argument("--host", default="http://localhost:11434", help="Ollama server URL")
     parser.add_argument("--decision-interval", type=float, default=0.5, help="Seconds between LLM decisions")
@@ -113,6 +116,8 @@ def main() -> None:
             problem = check_ollama_model(args.host, model)
             if problem:
                 sys.exit(problem)
+            if is_cloud_model(model):
+                continue
             print(f"Loading {model} into memory (first time can take a minute)...", flush=True)
             started = time.monotonic()
             problem = warm_up_ollama_model(args.host, model)

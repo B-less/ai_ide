@@ -1,6 +1,6 @@
 import unittest
 
-from pingpong_llm.controllers import HeuristicController, build_prompt, parse_action
+from pingpong_llm.controllers import HeuristicController, build_prompt, is_cloud_model, parse_action
 from pingpong_llm.game import HEIGHT, WIDTH, PongGame
 from pingpong_llm.main import PRESETS
 
@@ -23,6 +23,14 @@ class ParseActionTest(unittest.TestCase):
     def test_garbage_falls_back_to_stay(self):
         self.assertEqual(parse_action(""), "STAY")
         self.assertEqual(parse_action(None), "STAY")
+
+
+class CloudModelTest(unittest.TestCase):
+    def test_detects_cloud_tags(self):
+        self.assertTrue(is_cloud_model("nemotron-3-nano:30b-cloud"))
+        self.assertTrue(is_cloud_model("glm-4.6:cloud"))
+        self.assertFalse(is_cloud_model("nemotron-3-nano:4b"))
+        self.assertFalse(is_cloud_model("llama3.2"))
 
 
 class PromptTest(unittest.TestCase):

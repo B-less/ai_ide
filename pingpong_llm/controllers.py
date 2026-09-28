@@ -72,7 +72,14 @@ def check_ollama_model(host: str, model: str) -> str | None:
     if model in names or f"{model}:latest" in names:
         return None
     available = ", ".join(sorted(n for n in names if n)) or "none"
-    return f"Model '{model}' isn't available in Ollama. Run `ollama pull {model}`. Installed: {available}"
+    fix = f"ollama signin` then `ollama pull {model}" if is_cloud_model(model) else f"ollama pull {model}"
+    return f"Model '{model}' isn't available in Ollama. Run `{fix}`. Installed: {available}"
+
+
+def is_cloud_model(model: str) -> bool:
+    """Ollama Cloud models are tagged `-cloud` (e.g. `nemotron-3-nano:30b-cloud`) or just `cloud`."""
+    tag = model.rpartition(":")[2]
+    return tag == "cloud" or tag.endswith("-cloud")
 
 
 KEEP_ALIVE = "30m"
