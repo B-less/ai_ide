@@ -23,13 +23,33 @@ reason about a simple real-time control task.
 
 ## Setup
 
-```bash
-pip install -r requirements.txt      # requests only
-pip install pygame                   # optional, for --render pygame
+Run these from the repo root (`ai_ide/`). Use a virtual environment: recent
+Ubuntu/Debian refuse a system-wide `pip install` (the
+`externally-managed-environment` error), and a venv needs no `sudo`.
 
-ollama serve                         # if not already running
-ollama pull llama3.2                 # or any model you have
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1           # if blocked: Set-ExecutionPolicy -Scope Process Bypass
+pip install -r pingpong_llm\requirements.txt
 ```
+
+Linux / macOS:
+
+```bash
+python3 -m venv .venv                # on Ubuntu, may first need: sudo apt install python3-venv
+source .venv/bin/activate
+pip install -r pingpong_llm/requirements.txt
+```
+
+Optional: `pip install pygame` for `--render pygame`. Re-activate the venv in
+every new terminal.
+
+Then make sure Ollama has a model: `ollama list` to see what you have,
+`ollama pull llama3.2` to get one. Cloud models (names ending in `-cloud`,
+e.g. `nemotron-3-nano:30b-cloud`) work too after `ollama signin`; they go
+through the same local Ollama API, so nothing else changes.
 
 ## Run it
 
@@ -50,9 +70,16 @@ python -m pingpong_llm.main \
   --render pygame
 ```
 
+The script checks up front that Ollama is reachable and the model is
+installed, and exits with a clear message if not. In ascii mode, each LLM
+paddle gets a status line under the board showing its current move, how long
+its last reply took, and any error — the first thing to look at if a paddle
+seems frozen.
+
 Useful flags: `--decision-interval` (seconds between LLM calls, default 0.5 —
-lower is more responsive but hammers Ollama harder), `--host` (Ollama server
-URL if not on localhost:11434), `--max-score`, `--max-seconds`.
+lower is more responsive but hammers Ollama harder), `--timeout` (seconds to
+wait for one reply, default 30), `--host` (Ollama server URL if not on
+localhost:11434), `--max-score`, `--max-seconds`.
 
 ## Tuning for slower models
 
@@ -72,6 +99,39 @@ infrequent, late corrections from CPU-bound local models still connect. Tune
 further with `--paddle-speed`, `--paddle-height`, `--ball-speed`, and
 `--ball-speedup`, which override individual values from whichever `--preset`
 you picked — e.g. `--ball-speed 30` if even `slow-model` feels too fast.
+
+### Reasoning models: turn thinking off
+
+Models like `nemotron-3-nano`, `qwen3`, and `deepseek-r1` think before they
+answer, which can turn a sub-second reply into many seconds. For a one-word
+move that thinking rarely helps, so try `--no-think` first:
+
+```bash
+python -m pingpong_llm.main --left ollama --model nemotron-3-nano:4b --no-think --preset slow-model
+```
+
+Leave the flag off to use the model's own default; `--think` forces it on
+(fun for comparing whether reasoning plays better despite reacting later).
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `Can't reach Ollama at ...` | Start the Ollama app or run `ollama serve`; check `--host`. |
+| `Model '...' isn't available` | `ollama pull <model>`, or pick one from the listed installed models. |
+| Status line shows `ERROR ... timed out` | The model is slower than `--timeout`; raise it, add `--no-think`, or use a smaller model. |
+| Paddle moves but always too late | `--preset slow-model`, then lower `--ball-speed` further. |
+| Garbage like `←[H←[J` instead of a redrawn board | Use Windows Terminal, or `--render pygame`. |
+| `externally-managed-environment` from pip | Use the venv setup above. |
+
+## Tests
+
+```bash
+python -m unittest discover -s tests
+```
+
+Covers move parsing (including inline `<think>` blocks), paddle/ball physics,
+scoring, and the presets. No Ollama needed.
 
 ## Other tuning ideas
 

@@ -10,6 +10,9 @@ Examples:
     # give a slow local model a bigger paddle and a slower ball
     python -m pingpong_llm.main --left ollama --model llama3.2 --right heuristic --preset slow-model
 
+    # reasoning models (e.g. nemotron-3-nano) answer far faster with thinking off
+    python -m pingpong_llm.main --left ollama --model nemotron-3-nano:4b --no-think --preset slow-model
+
     # two different local models facing off
     python -m pingpong_llm.main --left ollama --model llama3.2 \\
         --right ollama --right-model qwen2.5:7b --render pygame
@@ -18,11 +21,12 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 
-from .controllers import Controller, HeuristicController, OllamaController
+from .controllers import Controller, HeuristicController, OllamaController, check_ollama_model
 from .game import BALL_BASE_SPEED, BALL_SPEEDUP, PADDLE_HEIGHT, PADDLE_SPEED, PongGame
-from .render_ascii import clear_screen, render as render_ascii
+from .render_ascii import clear_screen, enable_ansi, render as render_ascii
 
 # Bundles of paddle/ball physics tuned for how much reaction time a model needs.
 # "slow-model" gives a bigger paddle and a much slower, non-accelerating ball,
@@ -43,11 +47,17 @@ PRESETS = {
 }
 
 
-def build_controller(kind: str, model: str, host: str, decision_interval: float) -> Controller:
+def build_controller(kind: str, model: str, args: argparse.Namespace) -> Controller:
     if kind == "heuristic":
         return HeuristicController()
     if kind == "ollama":
-        return OllamaController(model=model, host=host, decision_interval=decision_interval)
+        return OllamaController(
+            model=model,
+            host=args.host,
+            decision_interval=args.decision_interval,
+            timeout=args.timeout,
+            think=args.think,
+        )
     raise ValueError(f"unknown controller kind: {kind}")
 
 
@@ -59,6 +69,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--right-model", default=None, help="Ollama model for the right paddle (defaults to --model)")
     parser.add_argument("--host", default="http://localhost:11434", help="Ollama server URL")
     parser.add_argument("--decision-interval", type=float, default=0.5, help="Seconds between LLM decisions")
+    parser.add_argument(
+        "--timeout", type=float, default=30.0, help="Seconds to wait for one LLM reply before giving up (default: 30)"
+    )
+    parser.add_argument(
+        "--think",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Turn a reasoning model's thinking on/off (--no-think is much faster). Omit to use the model's default",
+    )
     parser.add_argument(
         "--preset",
         choices=list(PRESETS),
@@ -80,9 +99,17 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    left_model = args.model
+    right_model = args.right_model or args.model
 
-    left = build_controller(args.left, args.model, args.host, args.decision_interval)
-    right = build_controller(args.right, args.right_model or args.model, args.host, args.decision_interval)
+    for kind, model in ((args.left, left_model), (args.right, right_model)):
+        if kind == "ollama":
+            problem = check_ollama_model(args.host, model)
+            if problem:
+                sys.exit(problem)
+
+    left = build_controller(args.left, left_model, args)
+    right = build_controller(args.right, right_model, args)
 
     preset = PRESETS[args.preset]
     game = PongGame(
@@ -93,7 +120,9 @@ def main() -> None:
     )
 
     renderer = None
-    if args.render == "pygame":
+    if args.render == "ascii":
+        enable_ansi()
+    elif args.render == "pygame":
         from .render_pygame import PygameRenderer
 
         renderer = PygameRenderer()
@@ -109,6 +138,10 @@ def main() -> None:
             if args.render == "ascii":
                 clear_screen()
                 print(render_ascii(game))
+                for label, controller in (("L", left), ("R", right)):
+                    status = controller.status()
+                    if status:
+                        print(f" {label}: {status}")
             elif args.render == "pygame":
                 if not renderer.render(game):
                     break

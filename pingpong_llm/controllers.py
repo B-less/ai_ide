@@ -9,12 +9,14 @@ from abc import ABC, abstractmethod
 
 import requests
 
-VALID_ACTIONS = ("UP", "DOWN", "STAY")
 _ACTION_RE = re.compile(r"\b(UP|DOWN|STAY)\b", re.IGNORECASE)
+_THINK_RE = re.compile(r"<think>.*?(</think>|$)", re.IGNORECASE | re.DOTALL)
 
 
 def parse_action(text: str) -> str:
-    match = _ACTION_RE.search(text or "")
+    # Some reasoning models inline their chain of thought, which mentions every move.
+    answer = _THINK_RE.sub("", text or "")
+    match = _ACTION_RE.search(answer)
     return match.group(1).upper() if match else "STAY"
 
 
@@ -22,6 +24,9 @@ class Controller(ABC):
     @abstractmethod
     def get_action(self, state: dict) -> str:
         """Return one of UP/DOWN/STAY given the current game state. Must not block."""
+
+    def status(self) -> str | None:
+        return None
 
     def close(self) -> None:
         pass
@@ -54,8 +59,23 @@ def build_prompt(state: dict) -> str:
     )
 
 
+def check_ollama_model(host: str, model: str) -> str | None:
+    """Return a human-readable problem if the Ollama server or model isn't usable, else None."""
+    host = host.rstrip("/")
+    try:
+        resp = requests.get(f"{host}/api/tags", timeout=5)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        return f"Can't reach Ollama at {host} ({exc}). Is the Ollama app / `ollama serve` running?"
+    names = {m.get("name") for m in resp.json().get("models", [])}
+    if model in names or f"{model}:latest" in names:
+        return None
+    available = ", ".join(sorted(n for n in names if n)) or "none"
+    return f"Model '{model}' isn't available in Ollama. Run `ollama pull {model}`. Installed: {available}"
+
+
 class OllamaController(Controller):
-    """Queries a local Ollama model in the background and caches its latest decision.
+    """Queries an Ollama model in the background and caches its latest decision.
 
     Physics runs in real time and LLM inference is comparatively slow, so this
     controller never blocks the game loop: `get_action` just returns whatever
@@ -68,16 +88,21 @@ class OllamaController(Controller):
         model: str,
         host: str = "http://localhost:11434",
         decision_interval: float = 0.5,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
+        think: bool | None = None,
     ) -> None:
         self.model = model
         self.host = host.rstrip("/")
         self.decision_interval = decision_interval
         self.timeout = timeout
+        self.think = think
 
         self._lock = threading.Lock()
         self._latest_state: dict | None = None
         self._action = "STAY"
+        self._decisions = 0
+        self._last_latency: float | None = None
+        self._last_error: str | None = None
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -87,30 +112,47 @@ class OllamaController(Controller):
             self._latest_state = state
             return self._action
 
+    def status(self) -> str:
+        with self._lock:
+            if self._last_error:
+                return f"{self.model}: ERROR {self._last_error} (holding {self._action})"
+            if self._last_latency is None:
+                return f"{self.model}: waiting for first reply..."
+            return (
+                f"{self.model}: {self._action:<4} | last reply {self._last_latency:.1f}s"
+                f" | {self._decisions} decisions"
+            )
+
     def _loop(self) -> None:
         while not self._stop.is_set():
             with self._lock:
                 state = self._latest_state
             if state is not None:
-                action = self._query(state)
-                if action is not None:
-                    with self._lock:
-                        self._action = action
+                self._query(state)
             self._stop.wait(self.decision_interval)
 
-    def _query(self, state: dict) -> str | None:
-        prompt = build_prompt(state)
+    def _query(self, state: dict) -> None:
+        payload = {"model": self.model, "prompt": build_prompt(state), "stream": False}
+        if self.think is not None:
+            payload["think"] = self.think
+        started = time.monotonic()
         try:
-            resp = requests.post(
-                f"{self.host}/api/generate",
-                json={"model": self.model, "prompt": prompt, "stream": False},
-                timeout=self.timeout,
-            )
+            resp = requests.post(f"{self.host}/api/generate", json=payload, timeout=self.timeout)
             resp.raise_for_status()
-            return parse_action(resp.json().get("response", ""))
+            action = parse_action(resp.json().get("response", ""))
         except requests.RequestException as exc:
-            print(f"[ollama:{self.model}] request failed, keeping last action: {exc}")
-            return None
+            error = (str(exc) or type(exc).__name__).splitlines()[0][:120]
+            with self._lock:
+                is_new = error != self._last_error
+                self._last_error = error
+            if is_new:
+                print(f"[ollama:{self.model}] request failed, keeping last action: {error}")
+            return
+        with self._lock:
+            self._action = action
+            self._decisions += 1
+            self._last_latency = time.monotonic() - started
+            self._last_error = None
 
     def close(self) -> None:
         self._stop.set()

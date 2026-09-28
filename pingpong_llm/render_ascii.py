@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from .game import HEIGHT, PongGame, WIDTH
 
 COLS = 60
@@ -32,6 +34,13 @@ def render(game: PongGame) -> str:
     lines += ["|" + "".join(row) + "|" for row in grid]
     lines.append(border)
     return "\n".join(lines)
+
+
+def enable_ansi() -> None:
+    # Classic Windows consoles ignore ANSI escapes until VT processing is switched on;
+    # an empty os.system call is the stdlib-only way to trigger that.
+    if os.name == "nt":
+        os.system("")
 
 
 def clear_screen() -> None:
