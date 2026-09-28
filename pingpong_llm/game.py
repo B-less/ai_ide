@@ -23,12 +23,13 @@ class Paddle:
     x: float
     y: float = HEIGHT / 2
     height: float = PADDLE_HEIGHT
+    speed: float = PADDLE_SPEED
 
     def move(self, action: str, dt: float) -> None:
         if action == "UP":
-            self.y -= PADDLE_SPEED * dt
+            self.y -= self.speed * dt
         elif action == "DOWN":
-            self.y += PADDLE_SPEED * dt
+            self.y += self.speed * dt
         half = self.height / 2
         self.y = max(half, min(HEIGHT - half, self.y))
 
@@ -43,13 +44,25 @@ class Ball:
 
 @dataclass
 class PongGame:
-    left: Paddle = field(default_factory=lambda: Paddle(x=PADDLE_MARGIN))
-    right: Paddle = field(default_factory=lambda: Paddle(x=WIDTH - PADDLE_MARGIN))
-    ball: Ball = field(default_factory=Ball)
-    left_score: int = 0
-    right_score: int = 0
+    """Physics parameters default to the classic values but can be tuned per
+    instance (see main.py's --preset) — e.g. a bigger, slower-moving ball
+    setup gives a slow local model more real time to react between its
+    infrequent decisions."""
+
+    paddle_speed: float = PADDLE_SPEED
+    paddle_height: float = PADDLE_HEIGHT
+    ball_base_speed: float = BALL_BASE_SPEED
+    ball_speedup: float = BALL_SPEEDUP
+
+    left: Paddle = field(init=False)
+    right: Paddle = field(init=False)
+    ball: Ball = field(default_factory=Ball, init=False)
+    left_score: int = field(default=0, init=False)
+    right_score: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
+        self.left = Paddle(x=PADDLE_MARGIN, height=self.paddle_height, speed=self.paddle_speed)
+        self.right = Paddle(x=WIDTH - PADDLE_MARGIN, height=self.paddle_height, speed=self.paddle_speed)
         self.reset_ball()
 
     def reset_ball(self, serve_towards: str | None = None) -> None:
@@ -57,8 +70,8 @@ class PongGame:
         self.ball.y = HEIGHT / 2
         direction = 1 if serve_towards == "right" else -1 if serve_towards == "left" else random.choice([-1, 1])
         angle = random.uniform(-0.35, 0.35)
-        self.ball.vx = direction * BALL_BASE_SPEED
-        self.ball.vy = BALL_BASE_SPEED * angle
+        self.ball.vx = direction * self.ball_base_speed
+        self.ball.vy = self.ball_base_speed * angle
 
     def step(self, dt: float, left_action: str, right_action: str) -> str | None:
         """Advance the simulation by dt seconds. Returns 'left'/'right' if that side just scored."""
@@ -100,7 +113,7 @@ class PongGame:
         half = paddle.height / 2
         within_y = paddle.y - half <= ball.y <= paddle.y + half
         if within_x and within_y:
-            ball.vx = -ball.vx * BALL_SPEEDUP
+            ball.vx = -ball.vx * self.ball_speedup
             ball.vx = max(-BALL_MAX_SPEED, min(BALL_MAX_SPEED, ball.vx))
             offset = (ball.y - paddle.y) / half  # -1..1, where on the paddle it hit
             ball.vy += offset * 150

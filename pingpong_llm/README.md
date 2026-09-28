@@ -54,11 +54,25 @@ Useful flags: `--decision-interval` (seconds between LLM calls, default 0.5 —
 lower is more responsive but hammers Ollama harder), `--host` (Ollama server
 URL if not on localhost:11434), `--max-score`, `--max-seconds`.
 
-## Tuning ideas
+## Tuning for slower models
 
-- Faster/slower ball: edit `BALL_BASE_SPEED` / `BALL_SPEEDUP` in `game.py`.
-- Give the model less time pressure: raise `PADDLE_SPEED` down, or lower
-  `BALL_BASE_SPEED`, so a 0.5s decision cadence is enough to react.
+A slow local model might only produce a decision every few seconds (query
+time stacks on top of `--decision-interval`), so the default physics — tuned
+for a decision roughly every 0.5s — can be unfair: the ball crosses the whole
+court before a bigger/laggier model gets a second move in.
+
+```bash
+python -m pingpong_llm.main --left ollama --model <slow-model> --right heuristic --preset slow-model
+```
+
+`--preset slow-model` gives you a paddle ~75% taller, a ball at half speed,
+and no per-hit speedup (rallies don't ramp up), so infrequent, late
+corrections still connect. Tune further with `--paddle-speed`,
+`--paddle-height`, `--ball-speed`, and `--ball-speedup`, which override
+individual values from whichever `--preset` you picked.
+
+## Other tuning ideas
+
 - Try a chat-style prompt with few-shot examples instead of the raw
   `/api/generate` call in `controllers.py::build_prompt` if a model's
   one-word replies are unreliable.
