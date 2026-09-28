@@ -74,6 +74,29 @@ def check_ollama_model(host: str, model: str) -> str | None:
     return f"Model '{model}' isn't available in Ollama. Run `ollama pull {model}`. Installed: {available}"
 
 
+KEEP_ALIVE = "30m"
+# A one-word move needs only a few tokens; the cap stops a rambling model from eating the timeout.
+NO_THINK_MAX_TOKENS = 16
+
+
+def warm_up_ollama_model(host: str, model: str, timeout: float = 300.0) -> str | None:
+    """Load the model into memory before play so the first move doesn't pay the load time.
+
+    Returns a problem description on failure, else None.
+    """
+    try:
+        # Ollama loads the model and returns without generating when the prompt is empty.
+        resp = requests.post(
+            f"{host.rstrip('/')}/api/generate",
+            json={"model": model, "prompt": "", "keep_alive": KEEP_ALIVE},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        return (str(exc) or type(exc).__name__).splitlines()[0][:160]
+    return None
+
+
 class OllamaController(Controller):
     """Queries an Ollama model in the background and caches its latest decision.
 
@@ -132,9 +155,16 @@ class OllamaController(Controller):
             self._stop.wait(self.decision_interval)
 
     def _query(self, state: dict) -> None:
-        payload = {"model": self.model, "prompt": build_prompt(state), "stream": False}
+        payload = {
+            "model": self.model,
+            "prompt": build_prompt(state),
+            "stream": False,
+            "keep_alive": KEEP_ALIVE,
+        }
         if self.think is not None:
             payload["think"] = self.think
+        if self.think is False:
+            payload["options"] = {"num_predict": NO_THINK_MAX_TOKENS}
         started = time.monotonic()
         try:
             resp = requests.post(f"{self.host}/api/generate", json=payload, timeout=self.timeout)

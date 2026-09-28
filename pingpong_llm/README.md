@@ -119,7 +119,7 @@ Leave the flag off to use the model's own default; `--think` forces it on
 | --- | --- |
 | `Can't reach Ollama at ...` | Start the Ollama app or run `ollama serve`; check `--host`. |
 | `Model '...' isn't available` | `ollama pull <model>`, or pick one from the listed installed models. |
-| Status line shows `ERROR ... timed out` | The model is slower than `--timeout`; raise it, add `--no-think`, or use a smaller model. |
+| Status line shows `ERROR ... timed out` | The model is slower than `--timeout`. Add `--no-think` (also caps the reply length), then check `ollama ps`: `100% CPU` means no GPU is being used, so raise `--timeout` or use a smaller or `-cloud` model. |
 | Paddle moves but always too late | `--preset slow-model`, then lower `--ball-speed` further. |
 | Garbage like `←[H←[J` instead of a redrawn board | Use Windows Terminal, or `--render pygame`. |
 | `externally-managed-environment` from pip | Use the venv setup above. |

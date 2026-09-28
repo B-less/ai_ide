@@ -24,7 +24,13 @@ import argparse
 import sys
 import time
 
-from .controllers import Controller, HeuristicController, OllamaController, check_ollama_model
+from .controllers import (
+    Controller,
+    HeuristicController,
+    OllamaController,
+    check_ollama_model,
+    warm_up_ollama_model,
+)
 from .game import BALL_BASE_SPEED, BALL_SPEEDUP, PADDLE_HEIGHT, PADDLE_SPEED, PongGame
 from .render_ascii import clear_screen, enable_ansi, render as render_ascii
 
@@ -107,6 +113,13 @@ def main() -> None:
             problem = check_ollama_model(args.host, model)
             if problem:
                 sys.exit(problem)
+            print(f"Loading {model} into memory (first time can take a minute)...", flush=True)
+            started = time.monotonic()
+            problem = warm_up_ollama_model(args.host, model)
+            if problem:
+                print(f"  warm-up failed, continuing anyway: {problem}")
+            else:
+                print(f"  ready in {time.monotonic() - started:.1f}s")
 
     left = build_controller(args.left, left_model, args)
     right = build_controller(args.right, right_model, args)
