@@ -35,9 +35,9 @@ PRESETS = {
         "ball_speedup": BALL_SPEEDUP,
     },
     "slow-model": {
-        "paddle_speed": PADDLE_SPEED + 20,
-        "paddle_height": PADDLE_HEIGHT * 1.75,
-        "ball_speed": BALL_BASE_SPEED * 0.5,
+        "paddle_speed": PADDLE_SPEED + 40,
+        "paddle_height": PADDLE_HEIGHT * 2.25,
+        "ball_speed": BALL_BASE_SPEED * 0.25,
         "ball_speedup": 1.0,
     },
 }

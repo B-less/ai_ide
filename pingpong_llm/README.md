@@ -65,11 +65,13 @@ court before a bigger/laggier model gets a second move in.
 python -m pingpong_llm.main --left ollama --model <slow-model> --right heuristic --preset slow-model
 ```
 
-`--preset slow-model` gives you a paddle ~75% taller, a ball at half speed,
-and no per-hit speedup (rallies don't ramp up), so infrequent, late
-corrections still connect. Tune further with `--paddle-speed`,
-`--paddle-height`, `--ball-speed`, and `--ball-speedup`, which override
-individual values from whichever `--preset` you picked.
+`--preset slow-model` gives you a paddle more than double the default height,
+a ball at a quarter of the default speed (roughly a 12s full-court crossing
+instead of ~3s), and no per-hit speedup (rallies don't ramp up), so
+infrequent, late corrections from CPU-bound local models still connect. Tune
+further with `--paddle-speed`, `--paddle-height`, `--ball-speed`, and
+`--ball-speedup`, which override individual values from whichever `--preset`
+you picked — e.g. `--ball-speed 30` if even `slow-model` feels too fast.
 
 ## Other tuning ideas
 
